@@ -6,16 +6,20 @@
         activeTabId: null,
         tabCounter: 0,
         lastResult: null,
-        isExecuting: false
+        isExecuting: false,
+        activeSidebarTab: 'schema'
     };
 
     // --- DOM Elements ---
     const els = {
         schemaTree: document.getElementById('schema-tree'),
         historyTree: document.getElementById('history-tree'),
-        btnRefreshSchema: document.getElementById('btn-refresh-schema'),
+        btnRefreshSidebar: document.getElementById('btn-refresh-sidebar'),
         btnCollapseAll: document.getElementById('btn-collapse-all'),
-        schemaSearch: document.getElementById('schema-search'),
+        sidebarSearch: document.getElementById('sidebar-search'),
+        sidebarTitle: document.getElementById('sidebar-title'),
+        tabSchema: document.getElementById('tab-schema'),
+        tabHistory: document.getElementById('tab-history'),
         editorTabs: document.getElementById('editor-tabs'),
         btnAddTab: document.getElementById('btn-add-tab'),
         codeEditor: document.getElementById('code-editor'),
@@ -54,9 +58,18 @@
     }
 
     function bindEvents() {
-        els.btnRefreshSchema.addEventListener('click', loadSchema);
-        els.btnCollapseAll.addEventListener('click', () => renderSchema(state.schema));
-        els.schemaSearch.addEventListener('input', (e) => filterSchema(e.target.value));
+        els.btnRefreshSidebar.addEventListener('click', () => {
+            if (state.activeSidebarTab === 'schema') loadSchema();
+            else loadHistory();
+        });
+        els.btnCollapseAll.addEventListener('click', () => {
+            if (state.activeSidebarTab === 'schema') renderSchema(state.schema);
+            else if (state.history) renderSchema(state.history.children, els.historyTree);
+        });
+        els.sidebarSearch.addEventListener('input', (e) => filterSidebar(e.target.value));
+
+        els.tabSchema.addEventListener('click', () => switchSidebarTab('schema'));
+        els.tabHistory.addEventListener('click', () => switchSidebarTab('history'));
 
         els.btnAddTab.addEventListener('click', () => {
             state.tabCounter++;
@@ -136,9 +149,30 @@
         }
     }
 
+    function switchSidebarTab(tabName) {
+        state.activeSidebarTab = tabName;
+
+        // Update tab buttons
+        els.tabSchema.classList.toggle('active', tabName === 'schema');
+        els.tabHistory.classList.toggle('active', tabName === 'history');
+
+        // Update tree visibility
+        els.schemaTree.style.display = tabName === 'schema' ? 'block' : 'none';
+        els.historyTree.style.display = tabName === 'history' ? 'block' : 'none';
+
+        // Update header title
+        els.sidebarTitle.innerText = tabName === 'schema' ? 'Object Explorer' : 'Query History';
+
+        // Update search placeholder
+        els.sidebarSearch.placeholder = tabName === 'schema' ? 'Filter objects...' : 'Search history...';
+
+        // Re-filter with current search text
+        filterSidebar(els.sidebarSearch.value);
+    }
+
     // --- Schema Explorer ---
     async function loadSchema() {
-        els.btnRefreshSchema.classList.add('spin');
+        els.btnRefreshSidebar.classList.add('spin');
         try {
             const response = await fetch(`${window.SqlStudioApiUrl}/schema`);
             if (response.ok) {
@@ -165,7 +199,7 @@
         } catch (e) {
             console.error('Failed to load schema', e);
         } finally {
-            els.btnRefreshSchema.classList.remove('spin');
+            els.btnRefreshSidebar.classList.remove('spin');
         }
     }
 
@@ -198,8 +232,7 @@
                 };
 
                 if (shouldRender) {
-                    els.historyTree.style.display = 'block';
-                    renderSchema([state.history], els.historyTree);
+                    renderSchema(state.history.children, els.historyTree);
                 }
             }
         } catch (e) {
@@ -288,7 +321,7 @@
         });
     }
 
-    function filterSchema(text) {
+    function filterSidebar(text) {
         if (!text) {
             // Reset
             state.schema.forEach(s => {
@@ -298,7 +331,13 @@
                     if (c.children) c.children.forEach(o => o.isVisible = true);
                 });
             });
+            if (state.history && state.history.children) {
+                state.history.children.forEach(o => o.isVisible = true);
+                state.history.isVisible = true;
+            }
+
             renderSchema(state.schema);
+            if (state.history) renderSchema(state.history.children, els.historyTree);
             return;
         }
 
@@ -341,7 +380,7 @@
 
         renderSchema(state.schema);
         if (state.history) {
-            renderSchema([state.history], els.historyTree);
+            renderSchema(state.history.children, els.historyTree);
         }
         // Expand all when filtering
         document.querySelectorAll('.tree-children').forEach(el => el.classList.add('expanded'));

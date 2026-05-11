@@ -16,7 +16,7 @@ Mma.SqlStudio.SqlServer is packaged as a Razor Class Library (RCL), making it in
 
 - 🗄️ **SQL Object Explorer**: Browse databases, schemas, tables, views, and stored procedures seamlessly.
 - ✍️ **Query Editor**: Execute queries with full syntax highlighting and a responsive results grid.
-- 🕒 **Query History**: Automatically log query history, including browser metadata (cookies/localStorage), with a dedicated sidebar explorer.
+- 🕒 **Query History**: Dedicated sidebar tab for query history, including browser metadata (cookies/localStorage) and easy script re-execution.
 - 🎨 **Modern UI**: Clean, responsive, and dynamic interface built with vanilla CSS. Dark and Light mode supported!
 - 🔌 **Embeddable**: Drop into any ASP.NET Core application via Minimal APIs and Razor Pages in just a few lines of code.
 - ⚙️ **Highly Configurable**: Control routing, application naming, default connections, and schema loading.
@@ -29,7 +29,7 @@ Mma.SqlStudio.SqlServer is packaged as a Razor Class Library (RCL), making it in
 Add the package to your project using the .NET CLI:
 
 ```bash
-dotnet add package Mma.SqlStudio.SqlServer --version 1.4.0
+dotnet add package Mma.SqlStudio.SqlServer --version 1.4.1
 ```
 
 ### 2. Configure Services

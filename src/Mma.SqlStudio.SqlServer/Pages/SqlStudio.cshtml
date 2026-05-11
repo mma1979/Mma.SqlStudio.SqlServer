@@ -43,16 +43,24 @@
             <div class="workspace">
                 <!-- Sidebar -->
                 <div class="sidebar @(!SqlStudioOptions.Value.EnableSchemaLoad ? "collapsed" : "")" id="sidebar">
-                    <div class="sidebar-header">
-                        <span class="title"><i class="bi bi-database"></i> Object Explorer</span>
-                        <div class="actions">
-                            <i class="bi bi-arrow-clockwise" id="btn-refresh-schema" title="Refresh"></i>
-                            <i class="bi bi-plus-slash-minus" id="btn-collapse-all" title="Collapse All"></i>
+                    <div class="sidebar-tabs">
+                        <div class="sidebar-tab active" id="tab-schema" title="Object Explorer">
+                            <i class="bi bi-database"></i>
+                        </div>
+                        <div class="sidebar-tab" id="tab-history" title="Query History">
+                            <i class="bi bi-clock"></i>
                         </div>
                     </div>
                     <div class="search-box">
                         <i class="bi bi-search"></i>
-                        <input type="text" id="schema-search" placeholder="Filter objects..." spellcheck="false" />
+                        <input type="text" id="sidebar-search" placeholder="Search objects or history..." spellcheck="false" />
+                    </div>
+                    <div class="sidebar-header">
+                        <span class="title" id="sidebar-title">Object Explorer</span>
+                        <div class="actions">
+                            <i class="bi bi-arrow-clockwise" id="btn-refresh-sidebar" title="Refresh"></i>
+                            <i class="bi bi-plus-slash-minus" id="btn-collapse-all" title="Collapse All"></i>
+                        </div>
                     </div>
                     <div class="tree-view" id="schema-tree">
                         <!-- Schema nodes will be injected here via JS -->
