@@ -57,6 +57,9 @@
                     <div class="tree-view" id="schema-tree">
                         <!-- Schema nodes will be injected here via JS -->
                     </div>
+                    <div class="tree-view" id="history-tree" style="display: none;">
+                        <!-- History nodes will be injected here via JS -->
+                    </div>
                 </div>
                 <!-- /Sidebar -->
 
@@ -134,6 +137,8 @@
     <script>
         window.SqlStudioApiUrl = '/api/@SqlStudioOptions.Value.Route.TrimStart('/')';
         window.EnableSchemaLoad = @SqlStudioOptions.Value.EnableSchemaLoad.ToString().ToLower();
+        window.AllowHistoryLog = @SqlStudioOptions.Value.AllowHistoryLog.ToString().ToLower();
+        window.HistoryTableName = '@SqlStudioOptions.Value.HistoryTableName';
     </script>
     <script src="~/_content/Mma.SqlStudio.SqlServer/js/sqlstudio.js"></script>
     <script src="~/_content/Mma.SqlStudio.SqlServer/js/fileHelper.js"></script>

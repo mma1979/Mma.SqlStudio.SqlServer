@@ -40,6 +40,11 @@ builder.Services.AddSqlStudio(options =>
     
     // Set to null to return a 401 Unauthorized response instead of redirecting
     options.UnauthorizedRedirectUrl = null;
+
+    options.AllowHistoryLog = true;
+    options.HistoryTableName = "ScriptExecutionHistory";
+    options.CreateTable = true;
+
 });
 
 var app = builder.Build();

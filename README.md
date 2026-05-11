@@ -16,6 +16,7 @@ Mma.SqlStudio.SqlServer is packaged as a Razor Class Library (RCL), making it in
 
 - 🗄️ **SQL Object Explorer**: Browse databases, schemas, tables, views, and stored procedures seamlessly.
 - ✍️ **Query Editor**: Execute queries with full syntax highlighting and a responsive results grid.
+- 🕒 **Query History**: Automatically log query history, including browser metadata (cookies/localStorage), with a dedicated sidebar explorer.
 - 🎨 **Modern UI**: Clean, responsive, and dynamic interface built with vanilla CSS. Dark and Light mode supported!
 - 🔌 **Embeddable**: Drop into any ASP.NET Core application via Minimal APIs and Razor Pages in just a few lines of code.
 - ⚙️ **Highly Configurable**: Control routing, application naming, default connections, and schema loading.
@@ -28,7 +29,7 @@ Mma.SqlStudio.SqlServer is packaged as a Razor Class Library (RCL), making it in
 Add the package to your project using the .NET CLI:
 
 ```bash
-dotnet add package Mma.SqlStudio.SqlServer --version 1.3.1
+dotnet add package Mma.SqlStudio.SqlServer --version 1.4.0
 ```
 
 ### 2. Configure Services
@@ -72,6 +73,11 @@ builder.Services.AddSqlStudio(options =>
     // Set to null to return 401 Unauthorized instead of redirecting
     // Alternatively, provide a path like "/access-denied" to redirect rejected requests
     options.UnauthorizedRedirectUrl = null;
+
+    // Optional: Query History Configuration
+    options.AllowHistoryLog = true; // Enable history logging
+    options.HistoryTableName = "__SqlStudioQueryHistory"; // Custom table name
+    options.CreateTable = true; // Auto-create history table if it doesn't exist
 });
 ```
 

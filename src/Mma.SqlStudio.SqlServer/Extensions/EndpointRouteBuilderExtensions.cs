@@ -27,8 +27,14 @@ namespace Mma.SqlStudio.SqlServer.Extensions
 
             group.MapPost("/query", async (QueryRequest request, SchemaService schemaService) =>
             {
-                var result = await schemaService.ExecuteQueryAsync(request.Query);
+                var result = await schemaService.ExecuteQueryAsync(request.Query, request.Cookies, request.LocalStorage);
                 return Results.Ok(result);
+            });
+
+            group.MapGet("/history", async (SchemaService schemaService) =>
+            {
+                var history = await schemaService.GetHistoryAsync();
+                return Results.Ok(history);
             });
 
             return endpoints;
@@ -38,5 +44,7 @@ namespace Mma.SqlStudio.SqlServer.Extensions
     public class QueryRequest
     {
         public string Query { get; set; } = "";
+        public string? Cookies { get; set; }
+        public string? LocalStorage { get; set; }
     }
 }

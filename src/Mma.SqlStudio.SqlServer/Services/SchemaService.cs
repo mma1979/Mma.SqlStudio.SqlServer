@@ -76,7 +76,7 @@ namespace Mma.SqlStudio.SqlServer.Services
             }
         }
 
-        public async Task<QueryResult> ExecuteQueryAsync(string sql)
+        public async Task<QueryResult> ExecuteQueryAsync(string sql, string? cookies = null, string? localStorage = null)
         {
             var result = new QueryResult();
             try
@@ -110,6 +110,12 @@ namespace Mma.SqlStudio.SqlServer.Services
                 }
                 
                 result.Success = true;
+
+                // Log to history if enabled
+                if (_options.AllowHistoryLog)
+                {
+                    await LogHistoryAsync(sql, cookies, localStorage);
+                }
             }
             catch (Exception ex)
             {
@@ -119,12 +125,81 @@ namespace Mma.SqlStudio.SqlServer.Services
             return result;
         }
 
+        private async Task LogHistoryAsync(string sql, string? cookies, string? localStorage)
+        {
+            try
+            {
+                if (_options.CreateTable)
+                {
+                    await EnsureHistoryTableExistsAsync();
+                }
+
+                using var conn = new SqlConnection(GetConnectionString());
+                var query = $@"
+                    INSERT INTO [{_options.HistoryTableName}] (QueryText, Cookies, LocalStorage, ExecutedAt)
+                    VALUES (@sql, @cookies, @localStorage, GETDATE())";
+                
+                await conn.ExecuteAsync(query, new { sql, cookies, localStorage });
+            }
+            catch
+            {
+                // Ignore history logging errors to not break main query execution
+            }
+        }
+
+        public async Task EnsureHistoryTableExistsAsync()
+        {
+            using var conn = new SqlConnection(GetConnectionString());
+            var sql = $@"
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[{_options.HistoryTableName}]') AND type in (N'U'))
+                BEGIN
+                    CREATE TABLE [dbo].[{_options.HistoryTableName}] (
+                        Id INT IDENTITY(1,1) PRIMARY KEY,
+                        QueryText NVARCHAR(MAX),
+                        Cookies NVARCHAR(MAX),
+                        LocalStorage NVARCHAR(MAX),
+                        ExecutedAt DATETIME
+                    )
+                END";
+            await conn.ExecuteAsync(sql);
+        }
+
+        public async Task<IEnumerable<HistoryItem>> GetHistoryAsync()
+        {
+            if (!_options.AllowHistoryLog) return Enumerable.Empty<HistoryItem>();
+
+            try
+            {
+                if (_options.CreateTable)
+                {
+                    await EnsureHistoryTableExistsAsync();
+                }
+
+                using var conn = new SqlConnection(GetConnectionString());
+                var sql = $"SELECT TOP 100 * FROM [{_options.HistoryTableName}] ORDER BY ExecutedAt DESC";
+                return await conn.QueryAsync<HistoryItem>(sql);
+            }
+            catch
+            {
+                return Enumerable.Empty<HistoryItem>();
+            }
+        }
+
         private class SchemaItem
         {
             public string SchemaName { get; set; } = "";
             public string ObjectName { get; set; } = "";
             public string ObjectType { get; set; } = "";
         }
+    }
+
+    public class HistoryItem
+    {
+        public int Id { get; set; }
+        public string QueryText { get; set; } = "";
+        public string? Cookies { get; set; }
+        public string? LocalStorage { get; set; }
+        public DateTime ExecutedAt { get; set; }
     }
 
     public class SchemaNode
