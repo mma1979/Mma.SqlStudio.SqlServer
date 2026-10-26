@@ -54,6 +54,9 @@
             loadSchema();
             applySidebarState();
         }
+        if (window.AllowHistoryLog) {
+            loadHistory();
+        }
         addTab('query_1.sql', "SELECT\n    u.id,\n    u.username,\n    COUNT(e.id) AS total_events,\n    MAX(e.timestamp) AS last_active\nFROM users u\nJOIN events e ON u.id = e.user_id\nWHERE e.status = 'active'\nGROUP BY u.id, u.username\nORDER BY last_active DESC;");
     }
 
@@ -193,7 +196,6 @@
                     }))
                 }));
 
-                await loadHistory(true);
                 renderSchema(state.schema);
             }
         } catch (e) {
@@ -222,12 +224,16 @@
                             isSpecialAction: true,
                             isVisible: true
                         },
-                        ...(history || []).map(h => ({
-                            name: `${new Date(h.executedAt).toLocaleString()} - ${h.queryText.trim().substring(0, 30).replace(/\n/g, ' ')}...`,
-                            queryText: h.queryText,
-                            isHistoryItem: true,
-                            isVisible: true
-                        }))
+                        ...(history || []).map(h => {
+                            const date = h.executedAt ? new Date(h.executedAt) : new Date();
+                            const dateStr = isNaN(date.getTime()) ? 'Unknown Date' : date.toLocaleString();
+                            return {
+                                name: `${dateStr} - ${h.queryText ? h.queryText.trim().substring(0, 30).replace(/\n/g, ' ') : 'Empty Query'}...`,
+                                queryText: h.queryText || '',
+                                isHistoryItem: true,
+                                isVisible: true
+                            };
+                        })
                     ]
                 };
 
@@ -578,7 +584,8 @@
 
         const filename = `query_export_${new Date().toISOString().replace(/[:.]/g, '')}.csv`;
 
-        const blob = new Blob([csv], { type: 'text/csv' });
+        // Excel often assumes a legacy encoding for CSV unless a UTF-8 BOM is present.
+        const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.style.display = 'none';
@@ -626,7 +633,7 @@
                 state.lastResult = await response.json();
                 renderResults();
                 if (window.AllowHistoryLog) {
-                    loadHistory();
+                    await loadHistory();
                 }
             } else {
                 renderError("HTTP Error " + response.status);
